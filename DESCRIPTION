@@ -6,11 +6,11 @@ Version: 0.0.0.9000
 Date: 2017-06-12
 Authors@R: c(
     person("Magali", "Richard", , "magali.richard@univ-grenoble-alpes.fr", c("aut", "cre")),
-    person("Paul", "Terzian ", , "pl.terzian@gmail.com", c("aut", "cre")),
-    person("Florent", "Chuffart", , "florent.chuffart@gmail.com", c("aut", "cre")),
+    person("Paul", "Terzian ", , "pl.terzian@gmail.com", "aut"),
+    person("Florent", "Chuffart", , "florent.chuffart@gmail.com", "aut"),
     person("Daniel", "Jost", ,"daniel.jost@univ-grenoble-alpes.fr", "aut")
     )
-Maintainer: MAgali Richard <magali.richard@univ-grenoble-alpes.fr>
+Maintainer: Magali Richard <magali.richard@univ-grenoble-alpes.fr>
 License: CeCILL
 LazyData: TRUE
 RoxygenNote: 5.0.1
