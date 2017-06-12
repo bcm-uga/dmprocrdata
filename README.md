@@ -11,7 +11,7 @@ Objects available in the package are:
 
 * `data_trscr` matrix of transcriptomic data.
 * `data_cnv` matrix of genomic data.
-* `data_trscr` matrix of methylome data.
+* `data_meth` matrix of methylome data.
 * `exp_grp` dataframe of metadata concerning samples (`data_*` columns).
 * `gene_list` dataframe of metadata concerning genes (bed formatted, `data_trscr` and `data_cnv` rows).
 * `pf_meth` dataframe of metadata concerning methylome probes (`data_meth` rows).

@@ -1,0 +1,19 @@
+Package: dmprocrdata
+Type: Package
+Title: A set of data dedicated to the dmprocr R package
+Description: The `dmprocrdata` package provides a set of data dedicated to the dmprocr R package. It embeds TCGA public LUAD omics data. See https://cancergenome.nih.gov for details.
+Version: 0.0.0.9000
+Date: 2017-06-12
+Authors@R: c(
+    person("Magali", "Richard", , "magali.richard@univ-grenoble-alpes.fr", c("aut", "cre")),
+    person("Paul", "Terzian ", , "pl.terzian@gmail.com", "aut"),
+    person("Florent", "Chuffart", , "florent.chuffart@gmail.com", "aut"),
+    person("Daniel", "Jost", ,"daniel.jost@univ-grenoble-alpes.fr", "aut")
+    )
+Maintainer: Magali Richard <magali.richard@univ-grenoble-alpes.fr>
+License: CeCILL
+LazyData: TRUE
+RoxygenNote: 5.0.1
+Depends: R(>= 2.10.0)
+
+
