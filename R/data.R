@@ -40,17 +40,17 @@
 #' @source \url{https://cancergenome.nih.gov}
 "pf_meth"       
 
-
-data_trscr = 1
-data_cnv   = 1
-data_meth  = 1
-exp_grp    = 1
-gene_list  = 1
-pf_meth    = 1
-save(data_trscr, file="./data/data_trscr.RData", compress="xz")
-save(data_cnv  , file="./data/data_cnv.RData", compress="xz")
-save(data_meth , file="./data/data_meth.RData", compress="xz")
-save(exp_grp   , file="./data/exp_grp.RData", compress="xz")
-save(gene_list , file="./data/gene_list.RData", compress="xz")
-save(pf_meth   , file="./data/pf_meth.RData", compress="xz")
+## Here is an exemple of code that describe how florent initiates the data.
+# data_trscr = ...
+# data_cnv   = ...
+# data_meth  = ...
+# exp_grp    = ...
+# gene_list  = ...
+# pf_meth    = ...
+# save(data_trscr, file="./data/data_trscr.RData", compress="xz")
+# save(data_cnv  , file="./data/data_cnv.RData", compress="xz")
+# save(data_meth , file="./data/data_meth.RData", compress="xz")
+# save(exp_grp   , file="./data/exp_grp.RData", compress="xz")
+# save(gene_list , file="./data/gene_list.RData", compress="xz")
+# save(pf_meth   , file="./data/pf_meth.RData", compress="xz")
  
