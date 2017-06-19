@@ -1,7 +1,7 @@
 Package: dmprocrdata
 Type: Package
 Title: A set of data dedicated to the dmprocr R package
-Description: The `dmprocrdata` package provides a set of data dedicated to the `dmprocr` R package. It embeds TCGA public LUAD omics dataset. See https://cancergenome.nih.gov for details.
+Description: The `dmprocrdata` package provides datasets dedicated to the `dmprocr` R package. It embeds TCGA public LUAD omics data. See https://cancergenome.nih.gov for details.
 Version: 0.0.0.9000
 Date: 2017-06-12
 Authors@R: c(
