@@ -1,5 +1,7 @@
-# dmprocrdata
-A set of data dedicated to the dmprocr R package. 
+# dmprocrdata: a set of data dedicated to the dmprocr R package. 
+
+Paul Terzian, Florent Chuffart, Magali Richard
+
 
 ## Description
 
