@@ -23,6 +23,6 @@ Objects available in the package are:
 To get the current development version from github:
 
 ```R
-install.packages("devtools")
-devtools::install_github("magrichard/ptldata")
+# install.packages("devtools")
+devtools::install_github("magrichard/dmprocrdata")
 ```
