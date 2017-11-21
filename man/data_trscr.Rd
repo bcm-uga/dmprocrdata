@@ -4,7 +4,7 @@
 \name{data_trscr}
 \alias{data_trscr}
 \title{Transcriptome data.}
-\format{An object of class \code{numeric} of length 1.}
+\format{An object of class \code{data.frame} with 2997 rows and 505 columns.}
 \source{
 \url{https://cancergenome.nih.gov}
 }

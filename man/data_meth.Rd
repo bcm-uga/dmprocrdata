@@ -4,7 +4,7 @@
 \name{data_meth}
 \alias{data_meth}
 \title{Methylome data.}
-\format{An object of class \code{numeric} of length 1.}
+\format{An object of class \code{data.frame} with 25344 rows and 618 columns.}
 \source{
 \url{https://cancergenome.nih.gov}
 }

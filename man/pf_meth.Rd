@@ -4,7 +4,7 @@
 \name{pf_meth}
 \alias{pf_meth}
 \title{Methylome probes metadata.}
-\format{An object of class \code{numeric} of length 1.}
+\format{An object of class \code{data.frame} with 25344 rows and 10 columns.}
 \source{
 \url{https://cancergenome.nih.gov}
 }

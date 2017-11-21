@@ -1,0 +1,818 @@
+---
+title: "Performing Differential Methylation Profiles Clustering with `dmprocr`"
+author: "Paul Terzian, Florent Chuffart, Magali Richard"
+date: "`r Sys.Date()`"
+output: 
+  rmarkdown::html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    number_sections: true
+---
+
+
+```{r, echo=FALSE, eval=TRUE}
+knitr::opts_chunk$set(collapse=TRUE, comment = "#>", fig.width=9, fig.height=6, eval=TRUE, echo=FALSE, results="hide")
+```
+
+
+# Introduction
+
+`dmprocr` (**d**ifferential **m**ethylation **pro**files **c**lustering in **R**) is an open-access analysis software (R package). The purpose of this tutorial is to present a general method allowing to unbiasedly identify and characterize sets of genes that are epigenetically (de)regulated in cancer, using integrated bioinformatics and statistic studies of genomic, transcriptomic and epigenomic alterations.  
+
+# Dataset
+
+The dataset used for this example correspond to transcriptome, cnv and methylome data from the International Cancer Genome Consortium (TCGA) (534 patients with lung adenocarcinoma, PMID:25079552). 
+
+For chromosome 19 of each 534 patients,  we collected the expression (RNAseq, HTSeq-Counts), gene copy-number (WGS, copy number segment) and methylation data (Infinium 27K et 450K) from the [Genomic Commons Data portal](https://portal.gdc.cancer.gov/).
+
+The dataset is available as an R package called dmprocrdata (https://github.com/bcm-uga/dmprocrdata).
+
+`dmprocrdata` contains the objects which are detailled below.
+
+<span style="color:red">
+TO DO: <br>
+MR: Mettre les données dans le package dmrpocrdata.<br>
+FCh: done but no commit/push defore to be sure of the dataset.
+</span>
+
+## data_trscr
+
+`data_trscr` is a data matrix containing HTseq counts for each gene and each sample. Find more information on HTseq analysis pipeline on [GDC website](https://docs.gdc.cancer.gov/Encyclopedia/pages/HTSeq-Counts/).
+
+The rownames of the matrix define the gene_id (corresponding to the rownames of the `gene_list` BED file), the colnames define the sample ID (corresponding to the rownames of the `exp_grp` dataframe, i.e. *dmprocr_ID*)
+
+```{r, results="verbatim"}
+data_trscr = dmprocrdata::data_trscr
+is.matrix(data_trscr)
+data_trscr = as.matrix(data_trscr)
+tail(data_trscr[, 1:5])
+dim(data_trscr)
+is.matrix(data_trscr)
+```
+
+<span style="color:red">
+TO DO: <br>
+FCh: Some columns (samples) have names starting with number. It will be a poroblem.
+FCh: in dmprocrdata data_XXX must be a matrix
+</span>
+
+## data_cnv
+
+`data_cnv` is a data matrix containing Copy Number Segment values for each gene and each sample. Find more information on Copy Number Segment analysis pipeline on [GDC website](https://gdc-docs.nci.nih.gov/Data/Bioinformatics_Pipelines/CNV_Pipeline/).
+
+Please note that $$CopyNumberSegment = log2 (CNV/2) $$
+
+The rownames of the matrix define the gene_id (corresponding to the rownames of the `gene_list` BED file), the colnames define the sample ID (corresponding to the rownames of the `exp_grp` dataframe, i.e. *dmprocr_ID* )
+
+```{r, results="verbatim"}
+data_cnv = dmprocrdata::data_cnv
+is.matrix(data_cnv)
+head(data_cnv[,1:5])
+is.matrix(data_cnv)
+```
+
+
+<span style="color:red">
+TO DO: <br>
+FCh: Some columns (samples) have names starting with number. It will be a poroblem.
+</span>
+
+## meth_data
+
+`meth_data` is a data matrix containing methylation \beta values for each gene and each sample. Find more information on \beta values analysis pipeline on [GDC website](https://docs.gdc.cancer.gov/Data/Bioinformatics_Pipelines/Methylation_LO_Pipeline/).
+
+The rownames of the matrix define the probe_id (corresponding to the rownames of the `meth_platform` file), the colnames define the sample ID (corresponding to the rownames of the `exp_grp` dataframe, i.e. *dmprocr_ID* )
+
+```{r, results="verbatim"}
+meth_data = dmprocrdata::data_meth
+is.matrix(meth_data)
+meth_data = as.matrix(meth_data)
+head(meth_data[,1:5])
+```
+
+
+<span style="color:red">
+TO DO: <br>
+FCh: Some columns (samples) have names starting with number. It will be a poroblem.
+FCh: in dmprocrdata data_XXX must be a matrix
+</span>
+
+
+## gene_list
+
+`gene_list` is a BED file containing gene information. 
+
+Please provide a file with the following informations (conserve columns 1 to 7 names and meth_platform).
+
+- `seqnames`: the name of the chromosome.
+- `start` : the starting position of the feature in the chromosome.
+- `end` : the ending position of the feature in the chromosome.
+- `gene_id` : defines the name of the BED line, corresponds to the label of the feature
+- `score` : corresponds to a score associated with the feature, optionnal. 
+- `strand` : defines the strand.
+- `ref_genome` : defines the reference genome (optional)
+
+In this dataset, we used the [GDC reference genome](https://gdc.cancer.gov/download-gdc-reference-files)  'gencode.v22.annotation.gtf.gz' used in RNA-Seq alignment and by HTSeq, corresponding to GRCh38 (hg38).
+
+```{r}
+gene_list = dmprocrdata::gene_list
+gene_list = gene_list[gene_list$gene_type == "protein_coding",]
+gene_list[,5] = gene_list$gene_name
+gene_list = gene_list[,1:7]
+colnames(gene_list) = NULL
+head(gene_list)
+dim(gene_list)
+rownames(gene_list) = gene_list[,4]
+# gene_list = gene_list[1:10,]
+```
+
+<span style="color:red">
+TO DO: <br>
+FCh: gene_list 
+  - could be truncated to the 7 first columns 
+  - with col5 = gene_symbol 
+  - limited to "protein_coding" ???
+  - names DO NOT HAVE TO BE conserved.
+  - col4 elements MUST be unique
+  
+WARNING:
+  - concistency needs between gene_list[[1]] and meth_platform$Chromosome
+</span>
+
+
+## meth_platform
+
+`meth_platform` is a file containing methylation probes informations, generated by DNA methylation pipeline of the GDC,  from Illumina Infinium Human Methylation 27 (HM27) and HumanMethylation450 (HM450) arrays.
+
+- `Composite.Element.REF`: the name of the probe.
+
+- `Chromosome`: the name of the chromosome.
+
+- `Start` : the starting position of the feature in the chromosome.
+
+- `End` : the ending position of the feature in the chromosome.
+
+- `Gene_Symbol` : corresponds to genes associated with this probe.
+
+
+
+The row names of the file correspond to probes ID.
+
+```{r}
+meth_platform = dmprocrdata::pf_meth
+meth_platform = meth_platform[order(meth_platform$Chromosome, meth_platform$Start), ]
+meth_data = meth_data[rownames(meth_platform),]
+head(meth_platform)
+```
+<span style="color:red">
+TO DO: <br>
+MR: verifier quelles colonnes sont utilisées par Paul et les indiquer comme obligatoires dans cette section <br>
+FCh: "End" seems to be "Start" + 1 and "Gene_Symbol" embed many gs for a given probe. Id, Chromosome, Position, assembly should be enough.
+</span> 
+
+
+## exp_grp
+
+`exp_grp` is a dataframe containg patients information.
+
+!/! Please provide a file with at least the following informations (conserve columns 1 to 6 names and order).
+
+!/! Please make sure that you removed all sample replicates from your dataset
+
+- `dmprocr_ID`: the sample ID, a combinaison of `patient_ID` and `sample` type information, this corresponds to the *unique* entry of the dataframe.
+
+- `patient_ID` : the patient ID.
+
+- `sample` : the sample type, here 01 corresponds to *tumor* and 11 to *healthy* sample.
+
+- `trscr` : defines if transcription data are present for this sample, 1 corresponds to existing data (in the `data_trscr` data matrix), and 0 to missing data.
+
+- `cnv` : defines if copy number variation data are present for this sample, 1 corresponds to existing data (in the `data_cnv` data matrix), and 0 to missing data. 
+
+- `meth` : defines if methylation data are present for this sample, 1 corresponds to existing data (in the `data_cnv` data matrix), and 0 to missing data.
+
+Rownames of the dataframe corresponds to dmprocr_ID.
+
+```{r}
+exp_grp = dmprocrdata::exp_grp
+head(exp_grp)
+```
+
+
+
+
+
+## Missing data summary
+
+
+```{r}
+grid_arrange_shared_legend <- function(..., nrow = 1, ncol = length(list(...)), position = c("bottom", "right")) {
+
+  plots <- list(...)
+  position <- match.arg(position)
+  g <- ggplot2::ggplotGrob(plots[[1]] + ggplot2::theme(legend.position = position))$grobs
+  legend <- g[[which(sapply(g, function(x) x$name) == "guide-box")]]
+  lheight <- sum(legend$height)
+  lwidth <- sum(legend$width)
+  gl <- lapply(plots, function(x) x + ggplot2::theme(legend.position = "none"))
+  gl <- c(gl, nrow = nrow, ncol = ncol)
+
+  combined <- switch(position,
+                     "bottom" = gridExtra::arrangeGrob(do.call(gridExtra::arrangeGrob, gl),
+                                            legend,
+                                            ncol = 1,
+                                            heights = grid::unit.c(grid::unit(1, "npc") - lheight, lheight)),
+                     "right" = gridExtra::arrangeGrob(do.call(gridExtra::arrangeGrob, gl),
+                                           legend,
+                                           ncol = 2,
+                                           widths = grid::unit.c(grid::unit(1, "npc") - lwidth, lwidth)))
+  grid::grid.newpage()
+  grid::grid.draw(combined)
+}
+
+pt = ggplot2::ggplot(exp_grp, ggplot2::aes(sample, fill = as.factor(trscr))) + ggplot2::geom_bar() + ggplot2::ggtitle("trscr data") +
+  ggplot2::labs(x = "sample type", y = "# patients", fill = "data") +
+  ggplot2::scale_fill_manual(labels = c("missing", "existing"),  values = c("gray", "black"))
+pc = ggplot2::ggplot(exp_grp, ggplot2::aes(sample, fill = as.factor(cnv))) + ggplot2::geom_bar() +  ggplot2::ggtitle("cnv data") +
+  ggplot2::labs(x = "sample type", y = "# patients", fill = "data") +
+  ggplot2::scale_fill_manual(labels = c("missing", "existing"),  values = c("gray", "black"))
+pm = ggplot2::ggplot(exp_grp, ggplot2::aes(sample, fill = as.factor(meth))) + ggplot2::geom_bar() + ggplot2::ggtitle("meth data") +
+  ggplot2::labs(x = "sample type", y = "# patients", fill = "data") +
+  ggplot2::scale_fill_manual(labels = c("missing", "existing"),  values = c("gray", "black"))
+grid_arrange_shared_legend(pt, pc, pm, ncol=3 )
+
+## or an improved alternative:
+
+layout(matrix(1:3,1), respect=TRUE)
+barplot(table(exp_grp$trscr, exp_grp$sample)[2:1,], col=c("dimgrey", "grey"), main="transcriptomic data", ylab="#patients")
+barplot(table(exp_grp$cnv, exp_grp$sample)[2:1,], col=c("dimgrey", "grey"), main="genomic data")
+barplot(table(exp_grp$meth, exp_grp$sample)[2:1,], col=c("dimgrey", "grey"), main="methylome data")
+legend("topright", c("existing", "missing"), col=c("dimgrey", "grey"), pch=15)
+```
+
+
+<span style="color:red">
+FCh: What does "11" and "01" means?
+</span> 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Method
+
+`dmprocr` performs a 4-steps analysis: 
+
+1. Identification of differentially expressed region
+
+2. Differential methylation analysis
+
+3. Comparison and classification of differential methylation (DM) profiles
+
+4. Enrichment analysis
+
+This is a tutorial describing how to use `dmprocr` package.
+
+<span style="color:red">TO DO: Les noms des fonctions ne sont pas homogènes. Je ne sais pas s il faut corriger cela...  </span> 
+
+<span style="color:red">TO DO: Les examples des fonctions de Paul (étapes 2 et 3) sont réalisés à partir de la fonction dmRandomDataset. Il faudra tout mettre à jour avec la fonction generate_fakestudy qui crée une veritable étude simulée avec les critères que l on avait définis. </span> 
+
+```{r}
+library(dmprocr)
+```
+
+## Identification of differentially expressed region
+
+<span style="color:red">TO DO: Implementer 3.1 et 3.2 avec des données de puces (Flo?) </span> 
+
+<span style="color:red">TO DO: Optimiser le calcul des étapes 3.1 et 3.2. DEseq est long, je sais pas si on peut faire autrement. Pour la regression linéaire, je pense qu il y a moyen de faire beaucoup plus vite par contre.  </span> 
+
+### Normalisation and DE analysis by DEseqs 
+
+Using linear regression, we are selecting genes that display a significant variation of expression in tumour cells, without any change in DNA copy number. This step allows to select gene whose observed deregulation cannot be explained by structural variation and which are putative candidates for an epigenomic deregulation.
+
+```{r bla="bla"}
+dir.create("tmp", showWarnings=FALSE)
+if (!file.exists('tmp/dmprocrdata.rds')){
+dmprocrdata = RNAseq_diffAnalysis(
+  data_trscr = data_trscr         , 
+  exp_grp = exp_grp               , 
+  gene_list = gene_list           , 
+  alpha = 0.05                    , 
+  contrast = c("sample","01","11")
+)
+saveRDS(dmprocrdata, 'tmp/dmprocrdata.rds')
+}
+dmprocrdata = readRDS('tmp/dmprocrdata.rds')
+
+
+
+#plot the result.
+padj_thresh = 0.001
+size_vec = dmprocrdata$result_list$padj < padj_thresh
+size_vec= as.vector(as.factor(size_vec))
+size_vec[size_vec == FALSE] = "0.5"
+size_vec[size_vec == TRUE] = "1.5"
+size_vec[is.na(size_vec)] = "0"
+ggplot2::ggplot(dmprocrdata$result_list, ggplot2::aes(y=-log10(padj), x=log2FoldChange , size = as.factor(size_vec) )) + ggplot2::geom_point() + ggplot2::geom_hline(yintercept = -log10(padj_thresh)) +
+ggplot2::scale_size_manual(labels = c("ns", "NA","padj<0.001"), values = c(0,0, 2)) 
+
+
+# fad_dmprocrdata = fad_RNAseq_diffAnalysis(
+#   data_trscr = data_trscr                                         ,
+#   exp_grp = exp_grp                                               ,
+#   gene_list = gene_list                                           ,
+#   apply_func = epimedtools::monitored_apply                       ,
+#   contrast = c("sample","01","11")
+# )
+
+# layout(matrix(1:3, 1), respect=TRUE)
+#
+# plot(fad_dmprocrdata$result_list$log2FoldChange, dmprocrdata$result_list$log2FoldChange)
+# abline(h=c(-log2(1.5), log2(1.5)), v=c(-log2(1.5), log2(1.5)), col=2)
+#
+# plot(-log10(fad_dmprocrdata$result_list$padj), -log10(dmprocrdata$result_list$padj), pch=".")
+# abline(h=-log10(0.05), v=-log10(0.05), col=2)
+# abline(h=-log10(padj_thresh), v=-log10(padj_thresh), col=2)
+
+anadiff_res = dmprocrdata$result_list
+plot(anadiff_res$log2FoldChange, -log10(anadiff_res$padj),
+  pch=16, col=adjustcolor(1, alpha.f=0.1),
+  xlab="l2fc", ylab="-log10(padj)", main=paste(nrow(anadiff_res), "genes")
+)
+abline(h=-log10(padj_thresh), v=c(-log2(1.5), log2(1.5)), col=1, lty=2)
+```
+
+<span style="color:red">TO DO: 
+RNAseq_diffAnalysis could be fast 
+  - using paralle option of DESeq (to do)
+  - using a other test that retuirn fc and pval. (to be discussed)
+</span> 
+
+
+### Global method
+
+This method enables selection of candidate regions based on 3 criteria:
+
+- the log2FoldChange calculated by DEseq
+
+- the z-score of the linear regression
+
+- the log2FoldChange of indivuals without cnv in the region
+
+This criteria are present in the dmprocr$result_list
+
+### Linear regression counts ~ cnv
+
+```{r}
+if (!file.exists("tmp/dmprocrdata_result_lin_reg.rds")){
+  result_lin_reg = RNAseq_cnv_reg (
+    data_ntrscr = dmprocrdata$data_ntrscr    ,
+    data_cnv = data_cnv                      , 
+    exp_grp = exp_grp                        , 
+    apply_func = epimedtools::monitored_apply,
+    gene_list = dmprocrdata$result_list
+  )
+  saveRDS(result_lin_reg, "tmp/dmprocrdata_result_lin_reg.rds")
+}
+
+result_lin_reg  = readRDS("tmp/dmprocrdata_result_lin_reg.rds")
+
+#plot the result
+padj_thresh = 0.001
+size_vec = result_lin_reg$padj < padj_thresh
+size_vec= as.vector(as.factor(size_vec))
+size_vec[size_vec == FALSE] = "0.5"
+size_vec[size_vec == TRUE] = "1.5"
+size_vec[is.na(size_vec)] = "0"
+z_score_thresh = 0.3
+col_vec = result_lin_reg$z_score > (-z_score_thresh) & result_lin_reg$z_score < z_score_thresh 
+ggplot2::ggplot(result_lin_reg, ggplot2::aes(y=-log10(padj), x=log2FoldChange , size = as.factor(size_vec), colour = col_vec )) + ggplot2::geom_point() + 
+ ggplot2::scale_colour_manual(labels = c("ns","0.3<zscore<0.001", "na"), values = c("grey","red", "lightgray")) +
+ ggplot2::geom_point() + ggplot2::geom_hline(yintercept = -log10(padj_thresh)) +
+  ggplot2::scale_size_manual(labels = c("ns", "NA","padj<0.001"), values = c(0,0, 2)) 
+
+
+
+anadiff_res = dmprocrdata$result_list
+col = rep(1, nrow(anadiff_res))
+names(col) = rownames(anadiff_res)
+idx = rownames(result_lin_reg)[abs(result_lin_reg$z_score) < z_score_thresh]
+col[idx] = 2
+
+layout(1, respect=TRUE)
+plot(density(result_lin_reg$z_score, na.rm=TRUE))
+plot(anadiff_res$log2FoldChange, -log10(anadiff_res$padj),
+  pch=16, col=adjustcolor(col, alpha.f=0.1),
+  xlab="l2fc", ylab="-log10(padj)", main=paste(nrow(anadiff_res), "genes")
+)
+points(anadiff_res[idx,]$log2FoldChange, -log10(anadiff_res[idx,]$padj), col=2)
+abline(h=-log10(padj_thresh), v=c(-log2(1.5), log2(1.5)), col=1, lty=2)
+legend("topright", pch=1, col=2, legend=paste0("abs(z_score)<", z_score_thresh, " (", length(idx), " genes)"))
+```
+
+### DE analysis on no-cnv samples
+
+```{r}
+if (!file.exists('tmp/dmprocrdata_result_lin_reg_no_cnv.rds')){
+  result_lin_reg_no_cnv = noCNV_diffAnalysis (data_ntrscr = dmprocrdata$data_ntrscr,
+                                       data_cnv = data_cnv, 
+                                       exp_grp = exp_grp, 
+                                       gene_list = result_lin_reg)
+  saveRDS(result_lin_reg_no_cnv, 'tmp/dmprocrdata_result_lin_reg_no_cnv.rds')
+}
+result_lin_reg_no_cnv = readRDS('tmp/dmprocrdata_result_lin_reg_no_cnv.rds')
+#plot the result
+padj_thresh = 0.001
+z_score_thresh = 0.3
+noCNVlog2FC_thres = 2
+size_vec = result_lin_reg_no_cnv$padj < padj_thresh
+col_vec = result_lin_reg_no_cnv$z_score > (-z_score_thresh) & result_lin_reg_no_cnv$z_score < z_score_thresh 
+shape_vec = (result_lin_reg_no_cnv$noCNVlog2FC > noCNVlog2FC_thres | result_lin_reg_no_cnv$noCNVlog2FC < (-noCNVlog2FC_thres) ) 
+size_vec= as.vector(as.factor(size_vec))
+size_vec[size_vec == FALSE] = "1"
+size_vec[size_vec == TRUE] = "2"
+size_vec[is.na(size_vec)] = "0"
+ggplot2::ggplot(data=result_lin_reg_no_cnv, ggplot2::aes(y=-log10(padj), x=log2FoldChange, colour=col_vec, shape = shape_vec, size = as.factor(size_vec))) + ggplot2::geom_point() + 
+  ggplot2::scale_shape_manual(labels = c("ns","noCNVlog2FC<-2 & noCNVlog2FC>2", "NA"), values = c(3,18, 18)) + 
+  ggplot2::scale_colour_manual(labels = c("ns","0.3<zscore<0.001", "na"), values = c("grey","red", "lightgray")) +
+  ggplot2::geom_point() + ggplot2::geom_hline(yintercept = -log10(padj_thresh)) +
+  ggplot2::scale_size_manual(labels = c("ns", "NA","padj<0.001"), values = c(0,0, 2)) 
+
+```
+
+### Generates a candidate table
+
+```{r}
+candidates = select_candidates(gene_list = result_lin_reg_no_cnv,
+                               padj_thresh = 0.001, 
+                               z_score_thresh = 0.3, 
+                               noCNVlog2FC_thres = 2)
+dim(candidates)
+
+```
+<span style="color:red">TO DO: 
+FCh: Plot a Venn diagram of each filter (padj_thresh, z_score_thresh, noCNVlog2FC_thres)
+</span> 
+
+
+
+
+
+
+
+
+
+### Personalized method
+
+This method enables selection of candidate regions based on 2 criteria:
+
+<span style="color:red">TO DO: developper la méthode. J aimerais génerer une table du type data_trscr avec 1 pour diffenretiellement exprimé et 0 pour les autres. L analyse est a effectuer sur les données normalisées par DEseq </span> 
+
+
+### Definition of DE samples
+
+This method is based on `penda` R package.
+
+### Selection of DE samples with no CNVs
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Differential methylation analysis
+
+For each candidate gene, we establish a profile of differential methylation based on the interpolation of methylation values between all the probes in the neighborhood of the TSS of that gene (VanderKraats, PMID:  23748561). 
+
+First we define the list of candidates and the corresponding BED file. 
+
+```{r}
+gene_list_candidates = candidates
+dim(gene_list_candidates)
+```
+
+<span style="color:red">TO DO: Homogénéiser la typo du code (à partir d ici j ai repris le code de paul en changeant la typo mais ce n est pas suffisant) </span> 
+
+### Prepare a differential methylation table
+
+First we define a list of control methylation samples ("11") and tumoral methylation samples ("01").
+
+<span style="color:red">TO DO: on pourrait utiliser ici le meme concept que ce que j'ai fait dans les fonctions précédentes, c'est à dire spécifier un contrast=c("sample", "01", "11") au lieu de vecteur de reférence idx_meth_tumor et ControRef...) </span>
+
+```{r, tidy=TRUE, tidy.opts=list(blank=FALSE, width.cutoff=55)}
+idx_meth_tumor = rownames(exp_grp)[exp_grp$meth == 1 & exp_grp$sample == "01"]
+idx_meth_ctrl = rownames(exp_grp)[exp_grp$meth == 1 & exp_grp$sample == "11"]
+```
+
+The we generate the differential methylation table.
+
+<span style="color:red">TO DO: Il faut modifier la fonction pour pouvoir ne générer la table de methylation différentielle que pour les sondes correspondant aux gènes candidats. Ici la table est calculée pour toutes les sondes de la platform </span>
+
+
+```{r}
+diff_meth_data = dmTable(
+  data = meth_data            , 
+  tumoral_ref = idx_meth_tumor, 
+  control_ref = idx_meth_ctrl
+)
+head(diff_meth_data)
+dim(diff_meth_data)
+```
+
+<span style="color:blue">RQ: la fonction de Paul renvoie une liste contenant data, platform et exp_grp. Je ne pense pas que cela soit nécessaire. Il me semblerait pertinent de modifier le code pour ne renvoyer qu une table de methylation differentielle. Mais il faudra verifier que cela fonctionne dans le reste des fonctions </span>
+
+### 3.2.2 Generate the corresponding differential methylation profiles
+
+Then we generate the differential methylatin profiles of interest, by specifying the minimum number of probes to consider a gene as informative (nbProbes), and the bining window(slide).
+
+<span style="color:red">TO DO: Attention, la fonction getalldmProfile va chercher en dur la colonne geneSymbol du bedfile, alors que celle ci n existe pas. Il faudra modifier cela selon si on decide d en faire une variable dynamique dans tout le package, ou de l appeler gene_id (comme dans le fichier gene_list de dmprocrdata) et de l imposer dans le structure des données </span>
+
+
+```{r, tidy=TRUE, tidy.opts=list(blank=FALSE, width.cutoff=55)}
+
+# url = "http://epimed.univ-grenoble-alpes.fr/database/query/jobs?jobid=YOUR_JOB_ID"
+# df = read.csv2(url, header=TRUE, sep=";")
+
+# Job ID 20171120104956904R388
+
+# url = "http://epimed.univ-grenoble-alpes.fr/database/query/jobs?jobid=20171120104956904R388"
+# df = read.csv2(url, header=TRUE, sep=";")
+# dim(df)
+
+# meth_data = dmprocrdata::data_meth
+# is.matrix(meth_data)
+# meth_data = as.matrix(meth_data)
+# head(meth_data[,1:5])
+# dim(meth_data)
+# meth_platform = dmprocrdata::pf_meth
+# meth_platform = meth_platform[order(meth_platform$Chromosome, meth_platform$Start), ]
+# meth_data = meth_data[rownames(meth_platform),]
+# head(meth_platform)
+# dim(meth_platform)
+#
+# meth_data = meth_data[1:100,]
+# meth_platform = meth_platform[rownames(meth_data),]
+
+# gene_list_candidates["ENSG00000225950.6",]
+# gene_list_candidates["ENSG00000221916.3",]
+
+
+# date()
+# foo = epimedtools::monitored_apply(gene_list_candidates, 1, methmybeachup::analyse_meth,
+#   meth_data=meth_data                ,
+#   meth_platform=
+
+# )
+# date()
+
+# methmybeachup::analyse_meth(
+#   gene=gene_list_candidates["ENSG00000221916.3",] ,
+#   meth_data=meth_data                             ,
+#   meth_platform=meth_platform
+# )
+
+
+
+
+
+# interpolateGene2 = function(vec, probes_pos, tss, strand, win, slide, interp.by) {
+#   xf         <- seq(tss - win - slide,  tss + win + slide, by = interp.by)
+#   if (sum(!is.na(vec))==0) {
+#     return(rep(NA, length(xf)))
+#   }
+#   xp         <- probes_pos[order(probes_pos)]
+#   yp         <- vec[order(probes_pos)]
+#   idx = !is.na(yp)
+#   xp = xp[idx]
+#   yp = yp[idx]
+#   xp_orig = xp
+#   yp_orig = yp
+#   #concatenate missing bp to x axis (in order to have 10000 bp windows everytime)
+#   xpA <- seq(from = tss - win - slide, to = min(xp)-1 )
+#   xpB <- seq(from = max(xp)+1, to = tss + win + slide)
+#   xp  <- c(xpA, xp, xpB)
+#   #add fictiv value to added bp in y axis
+#   yp  <- c( rep(0, length(xpA)), yp, rep(0, length(xpB)) )
+#   ######
+#   yf         <- signal::pchip(xp, yp, xf)
+#   if (strand == "-") {
+#     yf = rev(yf)
+#   }
+#   return(yf)
+# }
+#
+# compute_gene_profile = function(gene, meth_data, meth_platform, pf_pos_colname, win, slide, interp.by) {
+#   probe_idx = get_probe_names(gene, meth_platform=meth_platform)
+#   # return(length(probe_idx))
+#   if (length(probe_idx) < nbProbes) {
+#     return(NULL)
+#   } else {
+#
+#     data         = meth_data[probe_idx,]
+#     probes_pos   = meth_platform[probe_idx, pf_pos_colname]
+#     tss          = ifelse (gene[[6]] == "+", as.numeric(gene[[2]]), as.numeric(gene[[3]]))
+#     strand       = gene[[6]]
+#
+#     # profile = dmProfile(gene_study_info, slide=slide, pf_pos_colname=pf_pos_colname)
+#     # return(profiles)
+#     big2 <- apply(
+#       data , 2,
+#       # vec = data[,5]
+#       interpolateGene2      ,
+#       probes_pos=probes_pos ,
+#       tss=tss               ,
+#       strand=strand         ,
+#       win=win               ,
+#       slide=slide           ,
+#       interp.by=interp.by
+#     )
+#     head(big2)
+#     dim(big2)
+#
+#     meanOfInter2 = apply(big2, 1, mean, na.rm=TRUE)
+#     # plot(meanOfInter2, meanOfInter[,2])
+#     # meanOfInter2 == meanOfInter[,2]
+#     varOfInter2 = apply(big2, 1, var, na.rm=TRUE)
+#     # plot(varOfInter2, varOfInter[,2])
+#     # varOfInter2 == varOfInter[,2]
+#
+#     xf         <- seq(tss - win - slide, tss + win + slide, by = interp.by)
+#
+#     pond = as.numeric(sapply(xf, function(x) {
+#       # 0
+#       min(abs(x - probes_pos)) <= 20*interp.by
+#     }))
+#     pond[varOfInter2==0] = 0
+#
+#     profile = data.frame(x=xf, y=meanOfInter2, var=varOfInter2, pond=pond, id=gene[[4]])
+#
+#     return(profile)
+#   }
+# }
+
+
+# notdiff_meth_study = diff_meth_study
+# meth_data = meth_data[rownames(diff_meth_data), colnames(diff_meth_data)]
+
+# # method 1 dmprocr FCh
+# quartz()
+# gp = compute_gene_profile(gene, meth_data=meth_data, meth_platform=meth_platform, pf_pos_colname, win, slide, interp.by)
+# plotdmProfile(dmprofileList = list(gp))[1]
+#
+#
+# # method 2 dmprocr Paul
+# quartz()
+# gene_study_info = list()
+# probe_idx = methmybeachup::analyse_meth(gene, meth_data=meth_data, meth_platform=meth_platform, JUST_PROBE_POS=TRUE)$probe_idx
+# gene_study_info$data         = meth_data[probe_idx,]
+# gene_study_info$probes_pos   = meth_platform[probe_idx,pf_pos_colname]
+# gene_study_info$tss          = ifelse (gene[[6]] == "+", as.numeric(gene[[2]]), as.numeric(gene[[3]]))
+# gene_study_info$strand       = gene[[6]]
+# gene_study_info$id           = gene[[4]]
+#
+# profile = dmProfile(gene_study_info, slide=slide, pf_pos_colname=pf_pos_colname)
+# plotdmProfile(dmprofileList = list(profile))[1]
+#
+# # method 3 methmybeachup
+# quartz()
+# probe_idx = methmybeachup::analyse_meth(gene, meth_data=meth_data, meth_platform=meth_platform)$probe_idx
+
+apply_func=epimedtools::monitored_apply
+nbProbes = 7
+pf_pos_colname = "Start"
+pf_chr_colname = "Chromosome"
+win = 5000           
+interp.by = 20       
+slide = 500          
+
+
+
+probe_idx = apply_func(gene_list_candidates, 1, get_probe_names, meth_platform=meth_platform, up_str=win+slide, dwn_str=win+slide)
+# methmybeachup::get_probe_names(gene, meth_platform=meth_platform)
+idx = sapply(probe_idx, length) > 0
+gene_list_candidates = gene_list_candidates[idx, ]
+probe_idx = probe_idx[idx]
+probe_idx = unique(unlist(probe_idx))
+names(probe_idx) = NULL
+
+meth_platform = meth_platform[probe_idx,]
+meth_platform = meth_platform[order(meth_platform[[pf_chr_colname]], meth_platform[[pf_pos_colname]]),]
+meth_data = meth_data[rownames(meth_data),]
+
+
+
+stop("EFN")
+
+
+
+if (!file.exists('tmp/profiles.rds')){
+  # gene = gene_list_candidates[75,]
+  # p = compute_gene_meth_profile( gene,
+  #   meth_data=diff_meth_data                    ,
+  #   meth_platform=meth_platform                 ,
+  #   pf_pos_colname=pf_pos_colname               ,
+  #   pf_chr_colname=pf_chr_colname               ,
+  #   win=win, slide=slide, interp.by=interp.by
+  # )
+  profiles = epimedtools::monitored_apply(mod=1,
+    gene_list_candidates, 1, compute_gene_meth_profile, 
+    meth_data=diff_meth_data, 
+    meth_platform=meth_platform, 
+    pf_pos_colname=pf_pos_colname, 
+    pf_chr_colname=pf_chr_colname, 
+    win=win, slide=slide, interp.by=interp.by
+  )
+  saveRDS(profiles, 'tmp/profiles.rds')
+}
+profiles = readRDS('tmp/profiles.rds')
+```
+
+Here is a differential methylation profile example:
+
+```{r, tidy=TRUE, tidy.opts=list(blank=FALSE, width.cutoff=55)}
+plotdmProfile(dmprofileList = profiles[1])[1]
+```
+
+## 3.3. Comparison and classification of differential methylation (DM) profiles
+
+We then define a specific metric that quantifies the distance between each pair of genes. Based on this metric, we perform hierarchical clustering on the distance matrix. This step allows to define groups of genes with similar DM profiles.
+
+### 3.3.1 Calculation of the distance between each profile
+
+```{r, tidy=TRUE, tidy.opts=list(blank=FALSE, width.cutoff=55)}
+dist_mat_orig = dmDistance(dmprofileList = profiles)
+head(dist_mat_orig)
+dim(dist_mat_orig)
+
+dist_mat_na = is.na(dist_mat_orig) + 0
+
+nb_na = apply(dist_mat_na, 2, sum)
+hist(nb_na, nclass=100, xlim=c(0, 50))
+idx = nb_na<20
+sum(idx)
+
+dist_mat = dist_mat_orig[idx, idx]
+# dist_mat[is.na(dist_mat)] = mean(dist_mat, na.rm=TRUE)#  #range(dist_mat, na.rm=TRUE)[2]^2
+dist_mat[is.na(dist_mat)] = range(dist_mat, na.rm=TRUE)[2]
+fit <- cmdscale(dist_mat, eig = TRUE, k = 2)
+
+x <- fit$points[, 1]
+y <- fit$points[, 2]
+plot(x, y)
+
+
+
+
+
+m  = sapply(profiles, "[[","y")
+v  = sapply(profiles, "[[","var")
+k  = sapply(profiles, "[[","pond")
+d = matrix(0, nrow=ncol(m), ncol=ncol(m) )
+
+FactoMineR::PCA(t(k))
+
+fit <- cmdscale(k, eig = TRUE, k = 2)
+x <- fit$points[, 1]
+y <- fit$points[, 2]
+
+plot(x, y)
+
+```
+
+```{r, tidy=TRUE, tidy.opts=list(blank=FALSE, width.cutoff=55)}
+list_dist_mat = dmDistance_translocate(dmprofileList = profiles, 
+                                        slide = 500)
+```
+
+### 3.3.2 Hierarchical clustering of the disctance matrix
+
+<span style="color:red">TO DO: Il y a un probleme avec la fonction clustdmProfile, la selection manuelle des clusters ne fonctionne qu a partir de 20 genes. Il faut regler ce bug, et voir si la seletion manuelle des cluster est bien ce qu il y a de mieux adapté. Sinon ce serait bien que cette fonction renvoie la gene_list initiale aggrémentée d une colonne cluster avec le numero des clusters associés.</span>
+
+```{r, tidy=TRUE, tidy.opts=list(blank=FALSE, width.cutoff=55)}
+geneNames    <- getProfileListID(dmprofileList = profiles)
+#clust_result <- clustdmProfile(mat = dist_mat, geneLabels = geneNames)
+```
+
+
+## 3.4. Enrichment analysis
+
+On each group of genes identified by the clustering having a significant demethylation, we perform standard enrichment analysis to estimate the functionality of each group. Then, we infer a typical epigenomic profile for each group in normal tissues to relate regional epigenome properties in normal tissue to the risk to be an epigenetically regulated domains in lung cancer.

@@ -4,7 +4,7 @@
 \name{exp_grp}
 \alias{exp_grp}
 \title{Sample metadata.}
-\format{An object of class \code{numeric} of length 1.}
+\format{An object of class \code{data.frame} with 743 rows and 13 columns.}
 \source{
 \url{https://cancergenome.nih.gov}
 }

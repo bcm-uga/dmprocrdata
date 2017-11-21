@@ -4,7 +4,7 @@
 \name{data_cnv}
 \alias{data_cnv}
 \title{Genome data.}
-\format{An object of class \code{numeric} of length 1.}
+\format{An object of class \code{matrix} with 2997 rows and 676 columns.}
 \source{
 \url{https://cancergenome.nih.gov}
 }

@@ -4,7 +4,7 @@
 \name{gene_list}
 \alias{gene_list}
 \title{Gene metadata.}
-\format{An object of class \code{numeric} of length 1.}
+\format{An object of class \code{data.frame} with 2997 rows and 28 columns.}
 \source{
 \url{https://cancergenome.nih.gov}
 }
