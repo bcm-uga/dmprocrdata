@@ -506,7 +506,7 @@ For each candidate gene, we establish a profile of differential methylation base
 First we define the list of candidates and the corresponding BED file. 
 
 ```{r}
-gene_list_candidates = candidates
+gene_list_candidates = candidates[1:100,]
 dim(gene_list_candidates)
 ```
 
@@ -518,7 +518,7 @@ First we define a list of control methylation samples ("11") and tumoral methyla
 
 <span style="color:red">TO DO: on pourrait utiliser ici le meme concept que ce que j'ai fait dans les fonctions précédentes, c'est à dire spécifier un contrast=c("sample", "01", "11") au lieu de vecteur de reférence idx_meth_tumor et ControRef...) </span>
 
-```{r, tidy=TRUE, tidy.opts=list(blank=FALSE, width.cutoff=55)}
+```{r}
 idx_meth_tumor = rownames(exp_grp)[exp_grp$meth == 1 & exp_grp$sample == "01"]
 idx_meth_ctrl = rownames(exp_grp)[exp_grp$meth == 1 & exp_grp$sample == "11"]
 ```
@@ -547,7 +547,7 @@ Then we generate the differential methylatin profiles of interest, by specifying
 <span style="color:red">TO DO: Attention, la fonction getalldmProfile va chercher en dur la colonne geneSymbol du bedfile, alors que celle ci n existe pas. Il faudra modifier cela selon si on decide d en faire une variable dynamique dans tout le package, ou de l appeler gene_id (comme dans le fichier gene_list de dmprocrdata) et de l imposer dans le structure des données </span>
 
 
-```{r, tidy=TRUE, tidy.opts=list(blank=FALSE, width.cutoff=55)}
+```{r}
 
 # url = "http://epimed.univ-grenoble-alpes.fr/database/query/jobs?jobid=YOUR_JOB_ID"
 # df = read.csv2(url, header=TRUE, sep=";")
@@ -594,8 +594,8 @@ Then we generate the differential methylatin profiles of interest, by specifying
 
 
 
-# interpolateGene2 = function(vec, probes_pos, tss, strand, win, slide, interp.by) {
-#   xf         <- seq(tss - win - slide,  tss + win + slide, by = interp.by)
+# interpolateGene2 = function(vec, probes_pos, tss, strand, updwn_str, slide, wig_size) {
+#   xf         <- seq(tss - updwn_str - slide,  tss + updwn_str + slide, by = wig_size)
 #   if (sum(!is.na(vec))==0) {
 #     return(rep(NA, length(xf)))
 #   }
@@ -607,8 +607,8 @@ Then we generate the differential methylatin profiles of interest, by specifying
 #   xp_orig = xp
 #   yp_orig = yp
 #   #concatenate missing bp to x axis (in order to have 10000 bp windows everytime)
-#   xpA <- seq(from = tss - win - slide, to = min(xp)-1 )
-#   xpB <- seq(from = max(xp)+1, to = tss + win + slide)
+#   xpA <- seq(from = tss - updwn_str - slide, to = min(xp)-1 )
+#   xpB <- seq(from = max(xp)+1, to = tss + updwn_str + slide)
 #   xp  <- c(xpA, xp, xpB)
 #   #add fictiv value to added bp in y axis
 #   yp  <- c( rep(0, length(xpA)), yp, rep(0, length(xpB)) )
@@ -620,7 +620,7 @@ Then we generate the differential methylatin profiles of interest, by specifying
 #   return(yf)
 # }
 #
-# compute_gene_profile = function(gene, meth_data, meth_platform, pf_pos_colname, win, slide, interp.by) {
+# compute_gene_profile = function(gene, meth_data, meth_platform, pf_pos_colname, updwn_str, slide, wig_size) {
 #   probe_idx = get_probe_names(gene, meth_platform=meth_platform)
 #   # return(length(probe_idx))
 #   if (length(probe_idx) < nbProbes) {
@@ -641,9 +641,9 @@ Then we generate the differential methylatin profiles of interest, by specifying
 #       probes_pos=probes_pos ,
 #       tss=tss               ,
 #       strand=strand         ,
-#       win=win               ,
+#       updwn_str=updwn_str               ,
 #       slide=slide           ,
-#       interp.by=interp.by
+#       wig_size=wig_size
 #     )
 #     head(big2)
 #     dim(big2)
@@ -655,11 +655,11 @@ Then we generate the differential methylatin profiles of interest, by specifying
 #     # plot(varOfInter2, varOfInter[,2])
 #     # varOfInter2 == varOfInter[,2]
 #
-#     xf         <- seq(tss - win - slide, tss + win + slide, by = interp.by)
+#     xf         <- seq(tss - updwn_str - slide, tss + updwn_str + slide, by = wig_size)
 #
 #     pond = as.numeric(sapply(xf, function(x) {
 #       # 0
-#       min(abs(x - probes_pos)) <= 20*interp.by
+#       min(abs(x - probes_pos)) <= 20*wig_size
 #     }))
 #     pond[varOfInter2==0] = 0
 #
@@ -675,7 +675,7 @@ Then we generate the differential methylatin profiles of interest, by specifying
 
 # # method 1 dmprocr FCh
 # quartz()
-# gp = compute_gene_profile(gene, meth_data=meth_data, meth_platform=meth_platform, pf_pos_colname, win, slide, interp.by)
+# gp = compute_gene_profile(gene, meth_data=meth_data, meth_platform=meth_platform, pf_pos_colname, updwn_str, slide, wig_size)
 # plotdmProfile(dmprofileList = list(gp))[1]
 #
 #
@@ -700,13 +700,14 @@ apply_func=epimedtools::monitored_apply
 nbProbes = 7
 pf_pos_colname = "Start"
 pf_chr_colname = "Chromosome"
-win = 5000           
-interp.by = 20       
+updwn_str = 5000           
+wig_size = 20       
 slide = 500          
+mask_wide = 1500  
 
 
 
-probe_idx = apply_func(gene_list_candidates, 1, get_probe_names, meth_platform=meth_platform, up_str=win+slide, dwn_str=win+slide)
+probe_idx = apply_func(gene_list_candidates, 1, get_probe_names, meth_platform=meth_platform, up_str=updwn_str+slide, dwn_str=updwn_str+slide)
 # methmybeachup::get_probe_names(gene, meth_platform=meth_platform)
 idx = sapply(probe_idx, length) > 0
 gene_list_candidates = gene_list_candidates[idx, ]
@@ -720,7 +721,7 @@ meth_data = meth_data[rownames(meth_data),]
 
 
 
-stop("EFN")
+# stop("EFN")
 
 
 
@@ -731,15 +732,16 @@ if (!file.exists('tmp/profiles.rds')){
   #   meth_platform=meth_platform                 ,
   #   pf_pos_colname=pf_pos_colname               ,
   #   pf_chr_colname=pf_chr_colname               ,
-  #   win=win, slide=slide, interp.by=interp.by
+  #   updwn_str=updwn_str, slide=slide, wig_size=wig_size
   # )
   profiles = epimedtools::monitored_apply(mod=1,
     gene_list_candidates, 1, compute_gene_meth_profile, 
-    meth_data=diff_meth_data, 
-    meth_platform=meth_platform, 
-    pf_pos_colname=pf_pos_colname, 
-    pf_chr_colname=pf_chr_colname, 
-    win=win, slide=slide, interp.by=interp.by
+    meth_data=diff_meth_data                          , 
+    meth_platform=meth_platform                       , 
+    pf_pos_colname=pf_pos_colname                     , 
+    pf_chr_colname=pf_chr_colname                     , 
+    mask_wide=mask_wide                               ,
+    updwn_str=updwn_str, slide=slide, wig_size=wig_size
   )
   saveRDS(profiles, 'tmp/profiles.rds')
 }
@@ -748,8 +750,8 @@ profiles = readRDS('tmp/profiles.rds')
 
 Here is a differential methylation profile example:
 
-```{r, tidy=TRUE, tidy.opts=list(blank=FALSE, width.cutoff=55)}
-plotdmProfile(dmprofileList = profiles[1])[1]
+```{r}
+plot_meth_profile(profiles[[1]])
 ```
 
 ## 3.3. Comparison and classification of differential methylation (DM) profiles
@@ -758,57 +760,32 @@ We then define a specific metric that quantifies the distance between each pair 
 
 ### 3.3.1 Calculation of the distance between each profile
 
-```{r, tidy=TRUE, tidy.opts=list(blank=FALSE, width.cutoff=55)}
-dist_mat_orig = dmDistance(dmprofileList = profiles)
+```{r}
+dist_mat_orig = dmDistance(profiles = profiles)
 head(dist_mat_orig)
 dim(dist_mat_orig)
+dist_mat = dist_mat_orig
 
-dist_mat_na = is.na(dist_mat_orig) + 0
+sum(is.na(dist_mat))
+dist_mat[is.na(dist_mat)] = mean(dist_mat, na.rm=TRUE)
+fit = cmdscale(dist_mat, eig = TRUE, k = 2)
 
-nb_na = apply(dist_mat_na, 2, sum)
-hist(nb_na, nclass=100, xlim=c(0, 50))
-idx = nb_na<20
-sum(idx)
-
-dist_mat = dist_mat_orig[idx, idx]
-# dist_mat[is.na(dist_mat)] = mean(dist_mat, na.rm=TRUE)#  #range(dist_mat, na.rm=TRUE)[2]^2
-dist_mat[is.na(dist_mat)] = range(dist_mat, na.rm=TRUE)[2]
-fit <- cmdscale(dist_mat, eig = TRUE, k = 2)
-
-x <- fit$points[, 1]
-y <- fit$points[, 2]
-plot(x, y)
-
-
-
-
-
-m  = sapply(profiles, "[[","y")
-v  = sapply(profiles, "[[","var")
-k  = sapply(profiles, "[[","pond")
-d = matrix(0, nrow=ncol(m), ncol=ncol(m) )
-
-FactoMineR::PCA(t(k))
-
-fit <- cmdscale(k, eig = TRUE, k = 2)
-x <- fit$points[, 1]
-y <- fit$points[, 2]
-
+x = fit$points[, 1]
+y = fit$points[, 2]
 plot(x, y)
 
 ```
 
-```{r, tidy=TRUE, tidy.opts=list(blank=FALSE, width.cutoff=55)}
-list_dist_mat = dmDistance_translocate(dmprofileList = profiles, 
-                                        slide = 500)
+```{r}
+# list_dist_mat = dmDistance_translocate(dmprofileList = profiles, slide = 500)
 ```
 
 ### 3.3.2 Hierarchical clustering of the disctance matrix
 
 <span style="color:red">TO DO: Il y a un probleme avec la fonction clustdmProfile, la selection manuelle des clusters ne fonctionne qu a partir de 20 genes. Il faut regler ce bug, et voir si la seletion manuelle des cluster est bien ce qu il y a de mieux adapté. Sinon ce serait bien que cette fonction renvoie la gene_list initiale aggrémentée d une colonne cluster avec le numero des clusters associés.</span>
 
-```{r, tidy=TRUE, tidy.opts=list(blank=FALSE, width.cutoff=55)}
-geneNames    <- getProfileListID(dmprofileList = profiles)
+```{r}
+# geneNames    <- getProfileListID(dmprofileList = profiles)
 #clust_result <- clustdmProfile(mat = dist_mat, geneLabels = geneNames)
 ```
 
