@@ -45,10 +45,8 @@ The rownames of the matrix define the gene_id (corresponding to the rownames of 
 ```{r, results="verbatim"}
 data_trscr = dmprocrdata::data_trscr
 is.matrix(data_trscr)
-#data_trscr = as.matrix(data_trscr)
 tail(data_trscr[, 1:5])
 dim(data_trscr)
-#is.matrix(data_trscr)
 ```
 
 <span style="color:red">
@@ -71,7 +69,7 @@ The rownames of the matrix define the gene_id (corresponding to the rownames of 
 data_cnv = dmprocrdata::data_cnv
 is.matrix(data_cnv)
 head(data_cnv[,1:5])
-#is.matrix(data_cnv)
+dim(data_cnv)
 ```
 
 
@@ -89,7 +87,6 @@ The rownames of the matrix define the probe_id (corresponding to the rownames of
 ```{r, results="verbatim"}
 data_meth = dmprocrdata::data_meth
 is.matrix(data_meth)
-#meth_data = as.matrix(meth_data)
 head(data_meth[,1:5])
 dim(data_meth)
 ```
@@ -202,9 +199,12 @@ MR: I kept the 3 first columns and renamed them "probe_id", "seqnames", "positio
 
 Rownames of the dataframe corresponds to dmprocr_ID.
 
+- `tissue_status` : the tissue type, composed of two factors, "normal" and "patho" (for pathological)
+
 ```{r}
 exp_grp = dmprocrdata::exp_grp
 head(exp_grp)
+dim(exp_grp)
 ```
 
 
@@ -317,7 +317,7 @@ norm_trscr = RNAseq_normalization(
   exp_grp = exp_grp               , 
   gene_list = gene_list           , 
   alpha = 0.05                    , 
-  contrast = c("sample","01","11")
+  contrast = c("tissue_status","patho","normal")
 )
 saveRDS(norm_trscr, 'tmp/dmprocrdata_norm_trscr.rds')
 }
@@ -451,13 +451,13 @@ We perform DESeq2 analysis only on a subset of candidate genes. To be more accur
 norm_matrix = matrix(data = rep(norm_trscr$size_factor, dim(candidates)[1]), dim(candidates)[1], length(norm_trscr$size_factor),byrow = TRUE)
 
 dir.create("tmp", showWarnings=FALSE)
-if (!file.exists('tmp/dmprocrdata_DE_subset.rds')){
+if (!file.exists('tmp/dmprocrdata.rds')){
 dmprocrdata = RNAseq_diffAnalysis(
   data_trscr = data_trscr         , 
   exp_grp = exp_grp               , 
   gene_list = candidates           , 
   alpha = 0.05                    , 
-  contrast = c("sample","01","11"),
+  contrast = c("tissue_status","patho","normal"),
   normalization_factor = norm_matrix
 )
 saveRDS(dmprocrdata, 'tmp/dmprocrdata.rds')
@@ -585,8 +585,8 @@ First we define a list of control methylation samples ("11") and tumoral methyla
 <span style="color:red">TO DO: on pourrait utiliser ici le meme concept que ce que j'ai fait dans les fonctions précédentes, c'est à dire spécifier un contrast=c("sample", "01", "11") au lieu de vecteur de reférence idx_meth_tumor et ControRef...) </span>
 
 ```{r}
-idx_meth_tumor = rownames(exp_grp)[exp_grp$meth == 1 & exp_grp$sample == "01"]
-idx_meth_ctrl = rownames(exp_grp)[exp_grp$meth == 1 & exp_grp$sample == "11"]
+#idx_meth_tumor = rownames(exp_grp)[exp_grp$meth == 1 & exp_grp$sample == "01"]
+#idx_meth_ctrl = rownames(exp_grp)[exp_grp$meth == 1 & exp_grp$sample == "11"]
 ```
 
 The we generate the differential methylation table.
@@ -595,11 +595,18 @@ The we generate the differential methylation table.
 
 
 ```{r}
-diff_meth_data = dmTable(
-  data = data_meth            , 
-  tumoral_ref = idx_meth_tumor, 
-  control_ref = idx_meth_ctrl
-)
+
+diff_meth_data = compute_pop_dm_table( gene_list = gene_list,
+                                       exp_grp = exp_grp,
+                                       data_meth = data_meth,
+                                       contrast = c("tissue_status","patho","normal") ,
+                                       pf_meth = pf_meth,
+                                       pf_pos_colname = "position",
+                                       pf_chr_colname = "seqnames",
+                                       updwn_str = 5000,         
+                                       slide = 500, 
+                                       apply_func = epimedtools::monitored_apply)
+
 dim(diff_meth_data)
 ```
 
@@ -614,59 +621,64 @@ Then we generate the differential methylatin profiles of interest, by specifying
 
 ```{r}
 
+#Identifies probes for each gene of interest
+pf_pos_colname = "position"
+pf_chr_colname = "seqnames"
+updwn_str = 5000
+slide = 500
+filename = 'tmp/profiles.rds'
+probe_idx = epimedtools::monitored_apply(gene_list_candidates, 1, get_probe_names, pf_meth = pf_meth, pf_chr_colname = pf_chr_colname, pf_pos_colname = pf_pos_colname, up_str=updwn_str+slide, dwn_str=updwn_str+slide)
+
+#Filter genes with sufficient ammount of probes
+nb_probes = 7
+idx = sapply(probe_idx, length) > nb_probes
 
 
-apply_func=epimedtools::monitored_apply
-nbProbes = 7
-meth_platform = pf_meth
+#Compute the profile on genes of interest
+tmp_candidates = gene_list_candidates[idx, ] #bed_file of genes of interest
+probe_idx = probe_idx[idx]
+probe_idx = unique(unlist(probe_idx))
+tmp_pf_meth = pf_meth[probe_idx,] #methylation platform corresponding to tmp_candidates bed file
+
+#gene_list_candidates = gene_list_candidates[idx, ]
+#probe_idx = probe_idx[idx]
+#probe_idx = unique(unlist(probe_idx))
+#names(probe_idx) = NULL
+
+#meth_platform = pf_meth[probe_idx,]
+#meth_platform = meth_platform[order(meth_platform[[pf_chr_colname]], meth_platform[[pf_pos_colname]]),]
+#data_meth = data_meth[rownames(data_meth),]
+
+
 pf_pos_colname = "position"
 pf_chr_colname = "seqnames"
 updwn_str = 5000           
 wig_size = 20       
 slide = 500          
-mask_wide = 1500  
+mask_wide = 200  
+filename = 'tmp/profiles.rds'
 
+if (!file.exists(filename)){
 
-
-probe_idx = apply_func(gene_list_candidates, 1, get_probe_names, meth_platform = meth_platform, pf_chr_colname = pf_chr_colname, pf_pos_colname = pf_pos_colname, up_str=updwn_str+slide, dwn_str=updwn_str+slide)
-# methmybeachup::get_probe_names(gene, meth_platform=pf_meth)
-idx = sapply(probe_idx, length) > 0
-gene_list_candidates = gene_list_candidates[idx, ]
-probe_idx = probe_idx[idx]
-probe_idx = unique(unlist(probe_idx))
-names(probe_idx) = NULL
-
-meth_platform = pf_meth[probe_idx,]
-meth_platform = meth_platform[order(meth_platform[[pf_chr_colname]], meth_platform[[pf_pos_colname]]),]
-data_meth = data_meth[rownames(data_meth),]
-
-
-
-# stop("EFN")
-
-
-
-if (!file.exists('tmp/profiles.rds')){
-  # gene = gene_list_candidates[75,]
-  # p = compute_gene_meth_profile( gene,
-  #   meth_data=diff_meth_data                    ,
-  #   pf_meth=pf_meth                 ,
-  #   pf_pos_colname=pf_pos_colname               ,
-  #   pf_chr_colname=pf_chr_colname               ,
-  #   updwn_str=updwn_str, slide=slide, wig_size=wig_size
-  # )
   profiles = epimedtools::monitored_apply(mod=1,
-    gene_list_candidates, 1, compute_gene_meth_profile, 
-    meth_data = diff_meth_data                          , 
-    meth_platform = meth_platform                       , 
+    tmp_candidates, 1, compute_gene_meth_profile, 
+    exp_grp = exp_grp,
+    type_of_analysis = "pop", #comment in performing individual analysis
+    #type_of_analysis = "indiv", #comment in performing population analysis
+    contrast=c("sample","01","11"), #comment in performing individual analysis
+    #indiv_filtering_matrix = DE_matrix, #comment in performing population analysis
+    data_meth = diff_meth_data                          , 
+    pf_meth = tmp_pf_meth                       , 
     pf_pos_colname=pf_pos_colname                     , 
     pf_chr_colname=pf_chr_colname                     , 
     mask_wide=mask_wide                               ,
-    updwn_str=updwn_str, slide=slide, wig_size=wig_size
+    updwn_str=updwn_str,
+    slide=slide, 
+    wig_size=wig_size
   )
-  saveRDS(profiles, 'tmp/profiles.rds')
+  saveRDS(profiles, filename)
 }
-profiles = readRDS('tmp/profiles.rds')
+profiles = readRDS(filename)
 ```
 
 Here is a differential methylation profile example:
@@ -697,8 +709,8 @@ y = fit$points[, 2]
 
 col_vec = as.factor(gene_list_candidates[names(geneNames), ]$label)
 
-
-plot(x, y, col=col_vec)
+plot(x, y, col=col_vec, pch=18)
+legend("topright", legend = c("candidates","ctrl"), text.col=c("black", "red"))
 
 ```
 
