@@ -209,7 +209,10 @@ dim(exp_grp)
 
 
 
-
+<span style="color:red">
+TO DO: <br>
+MR: PB, exp_grp est une liste et je ne sais pas comment changer cela
+</span> 
 
 ## Missing data summary
 
